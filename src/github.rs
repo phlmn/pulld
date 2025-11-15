@@ -20,8 +20,8 @@ impl GitHub {
 
         Ok(GitHub {
             crab,
-            owner: owner.to_string(),
-            repo: repo.to_string(),
+            owner: owner.to_owned(),
+            repo: repo.to_owned(),
         })
     }
 }
@@ -36,7 +36,7 @@ impl Forge for GitHub {
         let page = handle.block_on(async {
             self.crab
                 .repos(&self.owner, &self.repo)
-                .list_statuses(sha.to_owned())
+                .list_statuses(sha.into())
                 .per_page(100)
                 .send()
                 .await
@@ -49,7 +49,7 @@ impl Forge for GitHub {
 
     fn set_commit_status(&self, sha: &str, status: CreateStatus) -> Result<()> {
         let repo = self.crab.repos(&self.owner, &self.repo);
-        let mut builder = repo.create_status(sha.to_string(), status.state.into());
+        let mut builder = repo.create_status(sha.into(), status.state.into());
 
         if let Some(desc) = status.description {
             builder = builder.description(desc);

@@ -1,20 +1,27 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use git2::{Cred, RemoteCallbacks};
 
 pub struct GitRepo {
     repo: git2::Repository,
+    path: PathBuf,
+    refspec: String,
 }
 
 impl GitRepo {
-    pub fn new(repo_path: &Path, ssh_url: &str) -> Self {
+    pub fn new(repo_path: &Path, ssh_url: &str, refspec: &str) -> Self {
         let repo = if repo_path.exists() {
             git2::Repository::open(repo_path).unwrap()
         } else {
             println!("Cloning repo...");
             GitRepo::clone_repo(ssh_url, repo_path).expect("Failed to clone repo")
         };
-        GitRepo { repo }
+
+        GitRepo { repo, path: repo_path.to_path_buf(), refspec: refspec.to_owned() }
+    }
+
+    pub fn path(&self) -> &Path {
+        self.path.as_path()
     }
 
     pub fn remote_url(&self) -> String {
@@ -23,7 +30,7 @@ impl GitRepo {
             .unwrap()
             .url()
             .unwrap()
-            .to_string()
+            .to_owned()
     }
 
     fn fetch_options<'a>() -> git2::FetchOptions<'a> {
@@ -62,7 +69,7 @@ impl GitRepo {
 
         Ok(self
             .repo
-            .find_branch("origin/main", git2::BranchType::Remote)?
+            .find_branch(&format!("origin/{}", self.refspec), git2::BranchType::Remote)?
             .get()
             .peel(git2::ObjectType::Commit)?)
     }

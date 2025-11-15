@@ -1,19 +1,18 @@
 mod forge;
 mod git;
 mod github;
+mod runner;
+mod workflow_config;
 
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use crossterm::style::Stylize;
+use gethostname::gethostname;
 use github::GitHub;
-use std::{path::Path, process::Stdio, sync::mpsc::RecvTimeoutError, time::Duration};
-use tokio::{
-    io::{AsyncBufReadExt, BufReader},
-    process::Command,
-    time::sleep,
-};
+use std::{path::Path, time::Duration};
+use tokio::time::sleep;
 
-use crate::{forge::Forge, git::GitRepo};
+use crate::{forge::Forge, git::GitRepo, runner::Runner};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum Backend {
@@ -81,27 +80,44 @@ struct Cli {
         help = "Path to a file containing the personal access token for authentication"
     )]
     github_token_file: Option<String>,
+
+    #[arg(
+        long = "host_identifier",
+        value_name = "ID",
+        env = "GITDEPLOY_HOST_IDENTIFIER",
+        default_value = "hostname",
+        help = "Identifier of the local host. Defaults to the hostname"
+    )]
+    host_identifier: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let repo_path = Path::new(&cli.checkout_path);
+    let host_identifier = cli
+        .host_identifier
+        .unwrap_or_else(|| {
+            gethostname()
+                .into_string()
+                .expect("Failed to get hostname, maybe specify host_identifier manually")
+        })
+        .clone();
 
     let gh = GitHub::new(&cli.repo, &cli.github_token.unwrap())?;
 
     let ssh_url = gh.git_ssh_url();
-    let git_repo = git::GitRepo::new(repo_path, ssh_url.as_str());
+    let git_repo = git::GitRepo::new(repo_path, &ssh_url, &cli.branch);
     let remote_url = git_repo.remote_url();
 
     // gh.get_commit_statuses(sha);
     //
-    let mut poller = Poller::new(git_repo, Box::new(gh))?;
+    let mut poller = Poller::new(git_repo, Box::new(gh), host_identifier)?;
 
     println!("👀 Watching for changes at {}...", remote_url);
     loop {
         poller.poll().await?;
-        sleep(Duration::from_secs(10)).await;
+        sleep(Duration::from_secs(cli.poll_interval)).await;
     }
 }
 
@@ -109,21 +125,20 @@ struct Poller {
     repo: GitRepo,
     forge: Box<dyn Forge>,
     current_commit_id: git2::Oid,
-    build_handle_and_sender: Option<(
-        tokio::task::JoinHandle<()>,
-        std::sync::mpsc::Sender<ToBuildMsg>,
-    )>,
+    runner: Runner,
+    host_identifier: String,
 }
 
 impl Poller {
-    fn new(repo: GitRepo, forge: Box<dyn Forge>) -> Result<Self> {
+    fn new(repo: GitRepo, forge: Box<dyn Forge>, host_identifier: String) -> Result<Self> {
         let current_commit_id = repo.current_commit()?.id();
 
         Ok(Poller {
             repo,
             forge,
             current_commit_id,
-            build_handle_and_sender: None,
+            runner: Runner::new(),
+            host_identifier,
         })
     }
 
@@ -134,7 +149,6 @@ impl Poller {
                 Ok(newest_commit) => {
                     if self.current_commit_id != newest_commit.id() {
                         self.current_commit_id = newest_commit.id();
-
                         true
                     } else {
                         false
@@ -148,146 +162,17 @@ impl Poller {
         };
 
         if build_needed {
-            if let Some((build_handle, to_build)) = self.build_handle_and_sender.take() {
-                if !build_handle.is_finished() {
-                    to_build.send(ToBuildMsg::Cancel).unwrap();
-                    let _ = build_handle.await;
-                    println!("{}", "Build canceled, due to ".bold().dark_grey()); // TODO
-                }
+            if self.runner.is_running() {
+                println!(
+                    "{}",
+                    "New commit, cancelling current run...".bold().dark_grey()
+                );
+                self.runner.cancel_run().await?;
             }
 
-            let (new_build, to_build_tx) = self.start_build(self.current_commit_id).await?;
-            self.build_handle_and_sender = Some((new_build, to_build_tx));
+            self.runner.start_run(&self.repo, self.current_commit_id, &self.host_identifier)?;
         }
 
         Ok(())
     }
-
-    async fn start_build(
-        &mut self,
-        commit_id: git2::Oid,
-    ) -> Result<(
-        tokio::task::JoinHandle<()>,
-        std::sync::mpsc::Sender<ToBuildMsg>,
-    )> {
-        let (to_build_tx, to_build_rx) = std::sync::mpsc::channel::<ToBuildMsg>();
-
-        println!(
-            "{}",
-            format!("Starting build for {}...", commit_id)
-                .bold()
-                .dark_yellow()
-        );
-
-        self.repo.checkout(commit_id)?;
-
-        let new_build = tokio::spawn(async move {
-            let mut build_canceled = false;
-            let mut build_failed = false;
-            let mut output = String::new();
-
-            'commands_loop: for i in 0..10 {
-                let cmd = format!("echo {} && sleep 9", i);
-                let mut child = Command::new("sh")
-                    .args(["-c", cmd.as_str()])
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .stdin(Stdio::null())
-                    .spawn()
-                    .unwrap();
-
-                println!("+ {}", cmd);
-
-                let child_stdout = child
-                    .stdout
-                    .take()
-                    .expect("Internal error, could not take stdout");
-                let child_stderr = child
-                    .stderr
-                    .take()
-                    .expect("Internal error, could not take stderr");
-
-                let (out_tx, out_rx) = std::sync::mpsc::channel();
-
-                let out_tx2 = out_tx.clone();
-                let stdout_task = tokio::spawn(async move {
-                    let mut lines = BufReader::new(child_stdout).lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        println!("{}", line);
-                        out_tx2.send(line).unwrap();
-                    }
-                });
-
-                let stderr_task = tokio::spawn(async move {
-                    let mut lines = BufReader::new(child_stderr).lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        println!("{}", line);
-                        out_tx.send(line).unwrap();
-                    }
-                });
-
-                while child.try_wait().is_ok_and(|res| res.is_none()) {
-                    let rec = to_build_rx.recv_timeout(Duration::from_millis(1));
-
-                    match rec {
-                        Err(RecvTimeoutError::Timeout) => {}
-                        Err(err) => {
-                            println!("Failed to receive message: {}", err);
-                            child.kill().await.unwrap();
-                            break 'commands_loop;
-                        }
-                        Ok(ToBuildMsg::Cancel) => {
-                            child.kill().await.unwrap();
-                            build_canceled = true;
-                            break;
-                        }
-                    }
-                }
-
-                let status = child
-                    .wait()
-                    .await
-                    .expect("Internal error, failed to wait on child command");
-
-                stdout_task.await.unwrap();
-                stderr_task.await.unwrap();
-
-                output.push_str(
-                    out_rx
-                        .into_iter()
-                        .collect::<Vec<String>>()
-                        .join("")
-                        .as_str(),
-                );
-
-                if !status.success() {
-                    build_failed = true;
-                    break;
-                }
-            }
-
-            if build_canceled {
-                println!("{}", "Build canceled".bold().dark_grey());
-                // from_build_tx
-                //     .send(FromBuildMsg::Canceled { output })
-                //     .unwrap();
-            } else if build_failed {
-                println!("{}", "Build failed ".bold().red());
-                // from_build_tx
-                //     .send(FromBuildMsg::Failed { output })
-                //     .unwrap();
-            } else {
-                // from_build_tx
-                //     .send(FromBuildMsg::Finished { output })
-                //     .unwrap();
-                println!("{}", "Build successful ".bold().green());
-            }
-        });
-
-        Ok((new_build, to_build_tx))
-    }
-}
-
-enum ToBuildMsg {
-    Cancel,
 }
