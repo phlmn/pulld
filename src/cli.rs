@@ -1,3 +1,5 @@
+use std::path::{PathBuf};
+
 use clap::{Parser, ValueEnum};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -26,21 +28,29 @@ pub struct Cli {
     pub repo: String,
 
     #[arg(
-        long = "git_branch",
-        env = "GITDEPLOY_GIT_BRANCH",
+        long = "branch",
+        env = "GITDEPLOY_BRANCH",
         default_value = "main",
         help = "Branch to watch for changes"
     )]
     pub branch: String,
 
     #[arg(
-        long = "git_checkout_path",
+        long = "checkout_path",
         value_name = "PATH",
         env = "GITDEPLOY_CHECKOUT_PATH",
         default_value = "/var/git-deploy", // TODO
         help = "Path where the repository will be checked out locally"
     )]
-    pub checkout_path: String,
+    pub checkout_path: PathBuf,
+
+    #[arg(
+        long = "ssh_key_path",
+        value_name = "PATH",
+        env = "GITDEPLOY_SSH_KEY_PATH",
+        help = "Path to the SSH private key file used for git"
+    )]
+    pub ssh_key_path: PathBuf,
 
     #[arg(
         long = "poll_interval",
@@ -55,6 +65,7 @@ pub struct Cli {
         long = "github_token",
         value_name = "TOKEN",
         env = "GITDEPLOY_GITHUB_TOKEN",
+        hide_env_values = true,
         help = "Personal access token for authentication"
     )]
     pub github_token: Option<String>,
@@ -65,11 +76,11 @@ pub struct Cli {
         env = "GITDEPLOY_GITHUB_TOKEN_FILE",
         help = "Path to a file containing the personal access token for authentication"
     )]
-    pub github_token_file: Option<String>,
+    pub github_token_file: Option<PathBuf>,
 
     #[arg(
         long = "host_identifier",
-        value_name = "ID",
+        value_name = "NAME",
         env = "GITDEPLOY_HOST_IDENTIFIER",
         help = "Identifier of the local host. Defaults to the hostname"
     )]

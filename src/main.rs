@@ -10,7 +10,7 @@ use clap::Parser;
 use crossterm::style::Stylize;
 use gethostname::gethostname;
 use github::GitHub;
-use std::{path::Path, time::Duration};
+use std::{time::Duration};
 use tokio::time::sleep;
 
 use crate::{cli::Cli, forge::Forge, git::GitRepo, runner::Runner};
@@ -18,7 +18,6 @@ use crate::{cli::Cli, forge::Forge, git::GitRepo, runner::Runner};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    let repo_path = Path::new(&cli.checkout_path);
     let host_identifier = cli
         .host_identifier
         .unwrap_or_else(|| {
@@ -31,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gh = GitHub::new(&cli.repo, &cli.github_token.unwrap())?;
 
     let ssh_url = gh.git_ssh_url();
-    let git_repo = git::GitRepo::new(repo_path, &ssh_url, &cli.branch);
+    let git_repo = git::GitRepo::new(&cli.checkout_path, &ssh_url, &cli.branch, &cli.ssh_key_path);
     let remote_url = git_repo.remote_url();
 
     // gh.get_commit_statuses(sha);

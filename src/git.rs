@@ -5,19 +5,25 @@ use git2::{Cred, RemoteCallbacks};
 pub struct GitRepo {
     repo: git2::Repository,
     path: PathBuf,
+    ssh_key_path: PathBuf,
     refspec: String,
 }
 
 impl GitRepo {
-    pub fn new(repo_path: &Path, ssh_url: &str, refspec: &str) -> Self {
+    pub fn new(repo_path: &Path, ssh_url: &str, refspec: &str, ssh_key_path: &Path) -> Self {
         let repo = if repo_path.exists() {
             git2::Repository::open(repo_path).unwrap()
         } else {
             println!("Cloning repo...");
-            GitRepo::clone_repo(ssh_url, repo_path).expect("Failed to clone repo")
+            GitRepo::clone_repo(ssh_url, repo_path, ssh_key_path).expect("Failed to clone repo")
         };
 
-        GitRepo { repo, path: repo_path.to_path_buf(), refspec: refspec.to_owned() }
+        GitRepo {
+            repo,
+            path: repo_path.to_path_buf(),
+            ssh_key_path: ssh_key_path.to_path_buf(),
+            refspec: refspec.to_owned(),
+        }
     }
 
     pub fn path(&self) -> &Path {
@@ -33,13 +39,13 @@ impl GitRepo {
             .to_owned()
     }
 
-    fn fetch_options<'a>() -> git2::FetchOptions<'a> {
+    fn fetch_options<'a>(ssh_key_path: &'a Path) -> git2::FetchOptions<'a> {
         let mut callbacks = RemoteCallbacks::new();
         callbacks.credentials(|_url, username_from_url, _allowed_types| {
             Cred::ssh_key(
                 username_from_url.unwrap(),
                 None,
-                Path::new("deploy-key"),
+                ssh_key_path,
                 None,
             )
         });
@@ -51,15 +57,15 @@ impl GitRepo {
     }
 
     fn fetch(&self) -> Result<(), git2::Error> {
-        let mut fo = GitRepo::fetch_options();
+        let mut fo = GitRepo::fetch_options(&self.ssh_key_path);
         self.repo
             .find_remote("origin")?
             .fetch(&["main"], Some(&mut fo), None)
     }
 
-    fn clone_repo(ssh_url: &str, path: &Path) -> Result<git2::Repository, git2::Error> {
+    fn clone_repo(ssh_url: &str, path: &Path, ssh_key_path: &Path) -> Result<git2::Repository, git2::Error> {
         let mut builder = git2::build::RepoBuilder::new();
-        builder.fetch_options(GitRepo::fetch_options());
+        builder.fetch_options(GitRepo::fetch_options(ssh_key_path));
 
         builder.clone(ssh_url, path)
     }
@@ -69,7 +75,10 @@ impl GitRepo {
 
         Ok(self
             .repo
-            .find_branch(&format!("origin/{}", self.refspec), git2::BranchType::Remote)?
+            .find_branch(
+                &format!("origin/{}", self.refspec),
+                git2::BranchType::Remote,
+            )?
             .get()
             .peel(git2::ObjectType::Commit)?)
     }
