@@ -27,17 +27,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .clone();
 
-    let gh = GitHub::new(&cli.repo, &cli.github_token.unwrap())?;
+    let gh = GitHub::new(&cli.owner, &cli.repo, &cli.github_token.unwrap())?;
 
     let ssh_url = gh.git_ssh_url();
     let git_repo = git::GitRepo::new(&cli.checkout_path, &ssh_url, &cli.branch, &cli.ssh_key_path);
-    let remote_url = git_repo.remote_url();
 
     // gh.get_commit_statuses(sha);
     //
     let mut poller = Poller::new(git_repo, Box::new(gh), host_identifier)?;
 
-    println!("👀 Watching for changes at {}...", remote_url);
+    println!("👀 Watching for changes at {}...", ssh_url);
     loop {
         poller.poll().await?;
         sleep(Duration::from_secs(cli.poll_interval)).await;
@@ -93,7 +92,10 @@ impl Poller {
                 self.runner.cancel_run().await?;
             }
 
-            self.runner.start_run(&self.repo, self.current_commit_id, &self.host_identifier)?;
+            let run_res = self.runner.start_run(&self.repo, self.current_commit_id, &self.host_identifier);
+            if let Err(err) = run_res {
+                println!("{}", format!("Failed to start run: {}", err).bold().red());
+            }
         }
 
         Ok(())

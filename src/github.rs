@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use octocrab::Octocrab;
 use tokio::runtime::Handle;
 
@@ -11,12 +11,8 @@ pub struct GitHub {
 }
 
 impl GitHub {
-    pub fn new(repo: &str, pat: &str) -> Result<GitHub> {
+    pub fn new(owner: &str, repo: &str, pat: &str) -> Result<GitHub> {
         let crab = octocrab::Octocrab::builder().personal_token(pat).build()?;
-
-        let (owner, repo) = repo
-            .split_once('/')
-            .ok_or_else(|| anyhow!("Invalid repository format"))?;
 
         Ok(GitHub {
             crab,

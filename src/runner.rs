@@ -61,7 +61,7 @@ impl Runner {
                 .dark_yellow()
         );
 
-        repo.checkout(commit_id)?;
+        repo.reset_hard(commit_id)?;
 
         let workflow_config = read_config(repo.path())?;
         let mut jobs = get_jobs_for_host(&workflow_config, host_identifier);

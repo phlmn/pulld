@@ -5,7 +5,6 @@ use clap::{Parser, ValueEnum};
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum Backend {
     Github,
-    Gitlab,
 }
 
 #[derive(Parser, Debug)]
@@ -19,8 +18,17 @@ pub struct Cli {
     pub backend: Backend,
 
     #[arg(
+        long = "owner",
+        value_name = "OWNER",
+        env = "GITDEPLOY_OWNER",
+        help = "The owner of the repository to watch for changes",
+        value_enum
+    )]
+    pub owner: String,
+
+    #[arg(
         long = "repo",
-        value_name = "OWNER/REPO",
+        value_name = "REPO",
         env = "GITDEPLOY_REPO",
         help = "The repository to watch for changes",
         value_enum

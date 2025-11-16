@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs::File, io::BufReader, path::Path};
 
+use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
-use anyhow::Result;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct JobTemplate {
@@ -24,8 +24,8 @@ pub struct WorkflowConfig {
 
 pub fn read_config(folder: &Path) -> Result<WorkflowConfig> {
     let file_path = folder.join("deploy.yaml");
-    println!("Reading config from {file_path:?}");
-    let file = File::open(file_path)?;
+    let file = File::open(&file_path)
+        .map_err(|_e| anyhow!("Couldn't open workflow config at {}", file_path.display()))?;
     let config = serde_yaml_ng::from_reader(BufReader::new(file))?;
     Ok(config)
 }
