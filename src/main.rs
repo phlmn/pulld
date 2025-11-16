@@ -10,7 +10,7 @@ use clap::Parser;
 use crossterm::style::Stylize;
 use gethostname::gethostname;
 use github::GitHub;
-use std::{time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 
 use crate::{cli::Cli, forge::Forge, git::GitRepo, runner::Runner};
@@ -32,9 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ssh_url = gh.git_ssh_url();
     let git_repo = git::GitRepo::new(&cli.checkout_path, &ssh_url, &cli.branch, &cli.ssh_key_path);
 
-    // gh.get_commit_statuses(sha);
-    //
-    let mut poller = Poller::new(git_repo, Box::new(gh), host_identifier)?;
+    let mut poller = Poller::new(git_repo, Arc::new(gh), host_identifier)?;
 
     println!("👀 Watching for changes at {}...", ssh_url);
     loop {
@@ -45,21 +43,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 struct Poller {
     repo: GitRepo,
-    forge: Box<dyn Forge>,
     current_commit_id: git2::Oid,
     runner: Runner,
     host_identifier: String,
 }
 
 impl Poller {
-    fn new(repo: GitRepo, forge: Box<dyn Forge>, host_identifier: String) -> Result<Self> {
+    fn new(repo: GitRepo, forge: Arc<dyn Forge>, host_identifier: String) -> Result<Self> {
         let current_commit_id = repo.current_commit()?.id();
 
         Ok(Poller {
             repo,
-            forge,
             current_commit_id,
-            runner: Runner::new(),
+            runner: Runner::new(forge),
             host_identifier,
         })
     }
@@ -87,12 +83,12 @@ impl Poller {
             if self.runner.is_running() {
                 println!(
                     "{}",
-                    "New commit, cancelling current run...".bold().dark_grey()
+                    "New commit, canceling current run...".bold().dark_grey()
                 );
                 self.runner.cancel_run().await?;
             }
 
-            let run_res = self.runner.start_run(&self.repo, self.current_commit_id, &self.host_identifier);
+            let run_res = self.runner.start_run(&self.repo, self.current_commit_id, &self.host_identifier).await;
             if let Err(err) = run_res {
                 println!("{}", format!("Failed to start run: {}", err).bold().red());
             }

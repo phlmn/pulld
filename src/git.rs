@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use git2::{Cred, RemoteCallbacks, build::CheckoutBuilder};
+use git2::{Cred, RemoteCallbacks};
 
 pub struct GitRepo {
     repo: git2::Repository,

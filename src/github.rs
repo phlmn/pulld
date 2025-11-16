@@ -1,6 +1,6 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use octocrab::Octocrab;
-use tokio::runtime::Handle;
 
 use crate::forge::{CreateStatus, Forge, Status, StatusState};
 
@@ -22,30 +22,31 @@ impl GitHub {
     }
 }
 
+#[async_trait]
 impl Forge for GitHub {
     fn git_ssh_url(&self) -> String {
         format!("git@github.com:{}/{}.git", self.owner, self.repo)
     }
 
-    fn get_commit_statuses(&self, sha: &str) -> Result<Vec<Status>> {
-        let handle = Handle::current();
-        let page = handle.block_on(async {
-            self.crab
-                .repos(&self.owner, &self.repo)
-                .list_statuses(sha.into())
-                .per_page(100)
-                .send()
-                .await
-        })?;
+    async fn get_commit_statuses(&self, sha: &str) -> Result<Vec<Status>> {
+        let page = self
+            .crab
+            .repos(&self.owner, &self.repo)
+            .list_statuses(sha.into())
+            .per_page(100)
+            .send()
+            .await?;
 
         // TODO: collect all pages
 
         Ok(page.items.into_iter().map(Into::into).collect())
     }
 
-    fn set_commit_status(&self, sha: &str, status: CreateStatus) -> Result<()> {
+    async fn set_commit_status(&self, sha: &str, status: CreateStatus) -> Result<()> {
         let repo = self.crab.repos(&self.owner, &self.repo);
         let mut builder = repo.create_status(sha.into(), status.state.into());
+
+        builder = builder.context(status.context);
 
         if let Some(desc) = status.description {
             builder = builder.description(desc);
@@ -55,8 +56,7 @@ impl Forge for GitHub {
             builder = builder.target(target_url);
         }
 
-        let handle = Handle::current();
-        handle.block_on(async { builder.send().await })?;
+        builder.send().await?;
 
         Ok(())
     }

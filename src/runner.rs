@@ -1,15 +1,14 @@
 use anyhow::Result;
 use crossterm::style::Stylize;
 use itertools::Itertools;
-use std::{borrow::Cow, env, process::Stdio, sync::mpsc::RecvTimeoutError, time::Duration};
+use std::{borrow::Cow, env, process::Stdio, sync::{Arc, mpsc::RecvTimeoutError}, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
 };
 
 use crate::{
-    workflow_config::{get_jobs_for_host, read_config},
-    git::GitRepo,
+    forge::{CreateStatus, Forge, StatusState}, git::GitRepo, workflow_config::{get_jobs_for_host, read_config}
 };
 
 pub struct Runner {
@@ -17,12 +16,14 @@ pub struct Runner {
         tokio::task::JoinHandle<()>,
         std::sync::mpsc::Sender<ToRunMsg>,
     )>,
+    forge: Arc<dyn Forge>,
 }
 
 impl Runner {
-    pub fn new() -> Self {
+    pub fn new(forge: Arc<dyn Forge>) -> Self {
         Self {
             run_handle_and_sender: None,
+            forge,
         }
     }
 
@@ -44,14 +45,7 @@ impl Runner {
         Ok(())
     }
 
-    pub async fn wait_for_run(&mut self) -> Result<()> {
-        if let Some((handle, _)) = self.run_handle_and_sender.take() {
-            handle.await?;
-        }
-        Ok(())
-    }
-
-    pub fn start_run(&mut self, repo: &GitRepo, commit_id: git2::Oid, host_identifier: &str) -> Result<()> {
+    pub async fn start_run(&mut self, repo: &GitRepo, commit_id: git2::Oid, host_identifier: &str) -> Result<()> {
         let (to_run_tx, to_run_rx) = std::sync::mpsc::channel::<ToRunMsg>();
 
         println!(
@@ -64,15 +58,35 @@ impl Runner {
         repo.reset_hard(commit_id)?;
 
         let workflow_config = read_config(repo.path())?;
-        let mut jobs = get_jobs_for_host(&workflow_config, host_identifier);
+        let jobs = get_jobs_for_host(&workflow_config, host_identifier)?;
+
+        for job_name in jobs.keys() {
+            self.forge.set_commit_status(&commit_id.to_string(), CreateStatus {
+                state: StatusState::Pending,
+                description: Some(format!("Job {job_name} on host {host_identifier} is waiting...")),
+                context: format!("deploy/{}/{}", job_name, host_identifier),
+                target_url: None,
+            }).await?;
+        }
+
+        let forge = self.forge.clone();
+        let host_identifier = host_identifier.to_owned();
 
         let run_handle = tokio::spawn(async move {
-            let mut run_canceled = false;
-            let mut run_failed = false;
-            let mut output = String::new();
+            let mut job_iter = jobs.into_iter();
+            while let Some((job_name, job)) = job_iter.next() {
+                let mut job_failed = false;
+                let mut job_canceled = false;
+                let mut output = String::new();
 
-            for (job_name, job) in jobs.drain() {
-                println!("Running job {job_name}...");
+                println!("{}", "Running job {job_name}...".bold());
+
+                let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
+                    state: StatusState::Pending,
+                    description: Some(format!("Job {job_name} on host {host_identifier} is running...")),
+                    context: format!("deploy/{}/{}", job_name, host_identifier),
+                    target_url: None,
+                }).await;
 
                 let mut script = String::new();
                 for cmd in job.script.unwrap_or_default() {
@@ -130,12 +144,12 @@ impl Runner {
                         Err(err) => {
                             println!("Failed to receive message: {}", err);
                             child.kill().await.unwrap();
-                            run_failed = true;
+                            job_failed = true;
                             break;
                         }
                         Ok(ToRunMsg::Cancel) => {
                             child.kill().await.unwrap();
-                            run_canceled = true;
+                            job_canceled = true;
                             break;
                         }
                     }
@@ -158,21 +172,37 @@ impl Runner {
                 );
 
                 if !status.success() {
-                    run_failed = true;
+                    job_failed = true;
                 }
 
-                if run_failed || run_canceled {
-                    break;
+                if job_canceled {
+                    println!("{}", "Job canceled".bold().dark_grey());
+                    let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
+                        state: StatusState::Error,
+                        description: Some(format!("Job {job_name} on host {host_identifier} was canceled")),
+                        context: format!("deploy/{}/{}", job_name, host_identifier),
+                        target_url: None,
+                    }).await;
+                } else if job_failed {
+                    println!("{}", "Job failed ".bold().red());
+                    let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
+                        state: StatusState::Error,
+                        description: Some(format!("Job {job_name} on host {host_identifier} failed")),
+                        context: format!("deploy/{}/{}", job_name, host_identifier),
+                        target_url: None,
+                    }).await;
+                } else {
+                    println!("{}", "Job succeeded".bold().green());
+                    let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
+                        state: StatusState::Success,
+                        description: Some(format!("Job {job_name} on host {host_identifier} was successful")),
+                        context: format!("deploy/{}/{}", job_name, host_identifier),
+                        target_url: None,
+                    }).await;
                 }
             }
 
-            if run_canceled {
-                println!("{}", "Run canceled".bold().dark_grey());
-            } else if run_failed {
-                println!("{}", "Run failed ".bold().red());
-            } else {
-                println!("{}", "Run successful ".bold().green());
-            }
+            println!("{}", "Run finished".bold());
         });
 
         self.run_handle_and_sender = Some((run_handle, to_run_tx));
