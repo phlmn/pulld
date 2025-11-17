@@ -11,7 +11,7 @@ pub enum Backend {
 pub struct Cli {
     #[arg(
         long = "backend",
-        env = "GITDEPLOY_BACKEND",
+        env = "PULLD_BACKEND",
         help = "The backend to use",
         value_enum
     )]
@@ -20,7 +20,7 @@ pub struct Cli {
     #[arg(
         long = "owner",
         value_name = "OWNER",
-        env = "GITDEPLOY_OWNER",
+        env = "PULLD_OWNER",
         help = "The owner of the repository to watch for changes",
         value_enum
     )]
@@ -29,7 +29,7 @@ pub struct Cli {
     #[arg(
         long = "repo",
         value_name = "REPO",
-        env = "GITDEPLOY_REPO",
+        env = "PULLD_REPO",
         help = "The repository to watch for changes",
         value_enum
     )]
@@ -37,7 +37,7 @@ pub struct Cli {
 
     #[arg(
         long = "branch",
-        env = "GITDEPLOY_BRANCH",
+        env = "PULLD_BRANCH",
         default_value = "main",
         help = "Branch to watch for changes"
     )]
@@ -46,8 +46,8 @@ pub struct Cli {
     #[arg(
         long = "checkout_path",
         value_name = "PATH",
-        env = "GITDEPLOY_CHECKOUT_PATH",
-        default_value = "/var/git-deploy", // TODO
+        env = "PULLD_CHECKOUT_PATH",
+        default_value = "/var/pulld", // TODO
         help = "Path where the repository will be checked out locally"
     )]
     pub checkout_path: PathBuf,
@@ -55,7 +55,7 @@ pub struct Cli {
     #[arg(
         long = "ssh_key_path",
         value_name = "PATH",
-        env = "GITDEPLOY_SSH_KEY_PATH",
+        env = "PULLD_SSH_KEY_PATH",
         help = "Path to the SSH private key file used for git"
     )]
     pub ssh_key_path: PathBuf,
@@ -63,7 +63,7 @@ pub struct Cli {
     #[arg(
         long = "poll_interval",
         value_name = "SECONDS",
-        env = "GITDEPLOY_POLL_INTERVAL",
+        env = "PULLD_POLL_INTERVAL",
         default_value_t = 10,
         help = "Time to wait between poll for changes in seconds"
     )]
@@ -72,7 +72,7 @@ pub struct Cli {
     #[arg(
         long = "github_token",
         value_name = "TOKEN",
-        env = "GITDEPLOY_GITHUB_TOKEN",
+        env = "PULLD_GITHUB_TOKEN",
         hide_env_values = true,
         help = "Personal access token for authentication"
     )]
@@ -81,7 +81,7 @@ pub struct Cli {
     #[arg(
         long = "github_token_file",
         value_name = "PATH",
-        env = "GITDEPLOY_GITHUB_TOKEN_FILE",
+        env = "PULLD_GITHUB_TOKEN_FILE",
         help = "Path to a file containing the personal access token for authentication"
     )]
     pub github_token_file: Option<PathBuf>,
@@ -89,7 +89,7 @@ pub struct Cli {
     #[arg(
         long = "host_identifier",
         value_name = "NAME",
-        env = "GITDEPLOY_HOST_IDENTIFIER",
+        env = "PULLD_HOST_IDENTIFIER",
         help = "Identifier of the local host. Defaults to the hostname"
     )]
     pub host_identifier: Option<String>,

@@ -489,25 +489,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "git-deploy"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "clap",
- "crossterm",
- "gethostname",
- "git2",
- "itertools",
- "octocrab",
- "serde",
- "serde_yaml_ng",
- "shell-escape",
- "tokio",
- "yaml-rust2",
-]
-
-[[package]]
 name = "git2"
 version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1172,6 +1153,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ee95bc4ef87b8d5ba32e8b7714ccc834865276eab0aed5c9958d00ec45f49e8"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "pulld"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap",
+ "crossterm",
+ "gethostname",
+ "git2",
+ "itertools",
+ "octocrab",
+ "serde",
+ "serde_yaml_ng",
+ "shell-escape",
+ "tokio",
+ "yaml-rust2",
 ]
 
 [[package]]
