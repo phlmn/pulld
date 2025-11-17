@@ -23,7 +23,7 @@ pub struct WorkflowConfig {
 }
 
 pub fn read_config(folder: &Path) -> Result<WorkflowConfig> {
-    let file_path = folder.join("deploy.yaml");
+    let file_path = folder.join(".pulld.yaml");
     let file = File::open(&file_path)
         .map_err(|_e| anyhow!("Couldn't open workflow config at {}", file_path.display()))?;
     let config = serde_yaml_ng::from_reader(BufReader::new(file))?;
