@@ -29,7 +29,16 @@
       );
 
       nixosModules.default = {
+        config,
+        pkgs,
+        lib,
+        ...
+      }: {
         nixpkgs.overlays = [ self.overlays.default ];
+
+        imports = [
+          ./nix/pulld-service.nix
+        ];
       };
     }
     // (flake-utils.lib.eachDefaultSystem (
