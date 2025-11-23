@@ -14,4 +14,9 @@ rustPlatform.buildRustPackage rec {
   cargoLock = {
     lockFile = ../Cargo.lock;
   };
+
+  meta = with lib; {
+    homepage = "https://github.com/phlmn/pulld";
+    mainProgram = "pulld";
+  };
 }
