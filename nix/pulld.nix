@@ -9,7 +9,13 @@ rustPlatform.buildRustPackage rec {
   version = "0.1.0";
   src = ./..;
 
-  buildInputs = [ pkgs.openssl ];
+  nativeBuildInputs = [
+    pkgs.pkg-config
+  ];
+
+  buildInputs = [
+    pkgs.openssl
+  ];
 
   cargoLock = {
     lockFile = ../Cargo.lock;
