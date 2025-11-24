@@ -1,23 +1,59 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use octocrab::Octocrab;
+use serde::{Deserialize, Serialize};
 
-use crate::forge::{CreateStatus, Forge, Status, StatusState};
+use crate::{forge::{CreateStatus, Forge, Status, StatusState}};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GithubStatusResponse {
+    pub state: String,
+    pub statuses: Vec<GithubStatus>,
+    pub sha: String,
+    pub total_count: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GithubStatusState {
+    Pending,
+    Success,
+    Failure,
+    Error,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GithubStatus {
+    pub id: u64,
+    pub node_id: String,
+    pub state: GithubStatusState,
+    pub description: Option<String>,
+    pub target_url: Option<String>,
+    pub context: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GithubCreateStatus {
+    pub state: GithubStatusState,
+    pub target_url: Option<String>,
+    pub description: Option<String>,
+    pub context: Option<String>,
+}
 
 pub struct GitHub {
-    crab: Octocrab,
     owner: String,
     repo: String,
+    pat: String,
 }
 
 impl GitHub {
     pub fn new(owner: &str, repo: &str, pat: &str) -> Result<GitHub> {
-        let crab = octocrab::Octocrab::builder().personal_token(pat).build()?;
-
+        println!("{}", pat);
         Ok(GitHub {
-            crab,
             owner: owner.to_owned(),
             repo: repo.to_owned(),
+            pat: pat.to_owned(),
         })
     }
 }
@@ -29,40 +65,47 @@ impl Forge for GitHub {
     }
 
     async fn get_commit_statuses(&self, sha: &str) -> Result<Vec<Status>> {
-        let page = self
-            .crab
-            .repos(&self.owner, &self.repo)
-            .list_statuses(sha.into())
-            .per_page(100)
+        let client = reqwest::Client::new();
+
+        let res = client.get(format!("https://api.github.com/repos/{}/{}/commits/{}/status", self.owner, self.repo, sha))
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("User-Agent", "pulld")
+            .bearer_auth(self.pat.clone())
+            .query(&[("per_page", 100)])
             .send()
+            .await?
+            .json::<GithubStatusResponse>()
             .await?;
 
         // TODO: collect all pages
-
-        Ok(page.items.into_iter().map(Into::into).collect())
+        Ok(res.statuses.into_iter().map(Into::into).collect())
     }
 
     async fn set_commit_status(&self, sha: &str, status: CreateStatus) -> Result<()> {
-        let repo = self.crab.repos(&self.owner, &self.repo);
-        let mut builder = repo.create_status(sha.into(), status.state.into());
+        let client = reqwest::Client::new();
 
-        builder = builder.context(status.context);
+        let res = client.post(format!("https://api.github.com/repos/{}/{}/statuses/{}", self.owner, self.repo, sha))
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("User-Agent", "pulld")
+            .bearer_auth(self.pat.clone())
+            .json(&GithubCreateStatus {
+                state: status.state.into(),
+                target_url: status.target_url,
+                description: status.description,
+                context: Some(status.context),
+            })
+            .send()
+            .await?;
 
-        if let Some(desc) = status.description {
-            builder = builder.description(desc);
-        }
-
-        if let Some(target_url) = status.target_url {
-            builder = builder.target(target_url);
-        }
-
-        builder.send().await?;
+        res.error_for_status()?;
 
         Ok(())
     }
 }
 
-impl Into<Status> for octocrab::models::Status {
+impl Into<Status> for GithubStatus {
     fn into(self) -> Status {
         Status {
             state: self.state.into(),
@@ -73,7 +116,7 @@ impl Into<Status> for octocrab::models::Status {
     }
 }
 
-impl From<StatusState> for octocrab::models::StatusState {
+impl From<StatusState> for GithubStatusState {
     fn from(status: StatusState) -> Self {
         match status {
             StatusState::Pending => Self::Pending,
@@ -84,7 +127,7 @@ impl From<StatusState> for octocrab::models::StatusState {
     }
 }
 
-impl Into<StatusState> for octocrab::models::StatusState {
+impl Into<StatusState> for GithubStatusState {
     fn into(self) -> StatusState {
         match self {
             Self::Pending => StatusState::Pending,
