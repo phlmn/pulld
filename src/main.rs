@@ -27,8 +27,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .clone();
 
-    let gh = GitHub::new(&cli.owner, &cli.repo, &cli.github_token.unwrap())?;
+    let github_token = if let Some(token_file) = &cli.github_token_file {
+        let token = std::fs::read_to_string(token_file)?;
+        token
+    } else {
+        cli.github_token.expect("No GitHub token provided")
+    };
 
+    let gh = GitHub::new(&cli.owner, &cli.repo, &github_token)?;
     let ssh_url = gh.git_ssh_url();
     let git_repo = git::GitRepo::new(&cli.checkout_path, &ssh_url, &cli.branch, &cli.ssh_key_path);
 
