@@ -29,7 +29,7 @@ let
 
       user = lib.mkOption {
         type = lib.types.str;
-        default = [ ];
+        default = null;
         example = "root";
         description = ''
           User for the systemd service.
@@ -67,14 +67,14 @@ let
   };
 
   mkService = name: serviceCfg: {
-    name = "pulld-runner-${name}";
+    name = "pulld-${name}";
     value = {
       description = "pulld Service - ${name}";
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       serviceConfig = {
-        DynamicUser = true;
+        DynamicUser = serviceCfg.user == null;
         User = serviceCfg.user;
         SupplementaryGroups = serviceCfg.extraGroups;
         EnvironmentFile = serviceCfg.environmentFile;
