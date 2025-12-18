@@ -1,11 +1,7 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use crossterm::style::Stylize;
 use itertools::Itertools;
-use std::{borrow::Cow, env, process::Stdio, sync::{Arc, mpsc::RecvTimeoutError}, time::Duration};
-use tokio::{
-    io::{AsyncBufReadExt, BufReader},
-    process::Command,
-};
+use std::{borrow::Cow, env, io::{BufRead, BufReader}, process::{Command, Stdio}, sync::{Arc, mpsc::RecvTimeoutError}, thread::{self, JoinHandle}, time::Duration};
 
 use crate::{
     forge::{CreateStatus, Forge, StatusState}, git::GitRepo, workflow_config::{get_jobs_for_host, read_config}
@@ -13,7 +9,7 @@ use crate::{
 
 pub struct Runner {
     run_handle_and_sender: Option<(
-        tokio::task::JoinHandle<()>,
+        JoinHandle<()>,
         std::sync::mpsc::Sender<ToRunMsg>,
     )>,
     forge: Arc<dyn Forge>,
@@ -35,23 +31,29 @@ impl Runner {
         }
     }
 
-    pub async fn wait_for_run(&mut self) {
+    pub fn wait_for_run(&mut self) -> Result<()> {
         if let Some((handle, _)) = self.run_handle_and_sender.take() {
-            handle.await;
+            handle.join().map_err(|err| {
+                anyhow!("asd")
+            })?;
         }
+
+        Ok(())
     }
 
-    pub async fn cancel_run(&mut self) -> Result<()> {
+    pub fn cancel_run(&mut self) -> Result<()> {
         if let Some((handle, to_run)) = self.run_handle_and_sender.take() {
             if !handle.is_finished() {
                 to_run.send(ToRunMsg::Cancel).unwrap();
-                let _ = handle.await;
+                handle.join().map_err(|err| {
+                    anyhow!("Failed to cancel run")
+                })?;
             }
         }
         Ok(())
     }
 
-    pub async fn start_run(&mut self, repo: &GitRepo, commit_id: git2::Oid, host_identifier: &str) -> Result<()> {
+    pub fn start_run(&mut self, repo: &GitRepo, commit_id: git2::Oid, host_identifier: &str) -> Result<()> {
         let (to_run_tx, to_run_rx) = std::sync::mpsc::channel::<ToRunMsg>();
 
         println!(
@@ -72,13 +74,13 @@ impl Runner {
                 description: Some(format!("Job {job_name} on host {host_identifier} is waiting...")),
                 context: format!("deploy/{}/{}", job_name, host_identifier),
                 target_url: None,
-            }).await?;
+            })?;
         }
 
         let forge = self.forge.clone();
         let host_identifier = host_identifier.to_owned();
 
-        let run_handle = tokio::spawn(async move {
+        let run_handle = thread::spawn(move || {
             let mut job_iter = jobs.into_iter();
             while let Some((job_name, job)) = job_iter.next() {
                 let mut job_failed = false;
@@ -92,7 +94,7 @@ impl Runner {
                     description: Some(format!("Job {job_name} on host {host_identifier} is running...")),
                     context: format!("deploy/{}/{}", job_name, host_identifier),
                     target_url: None,
-                }).await;
+                });
 
                 let mut script = String::new();
                 for cmd in job.script.unwrap_or_default() {
@@ -126,17 +128,17 @@ impl Runner {
                 let (out_tx, out_rx) = std::sync::mpsc::channel();
 
                 let out_tx2 = out_tx.clone();
-                let stdout_task = tokio::spawn(async move {
+                let stdout_task = thread::spawn(move || {
                     let mut lines = BufReader::new(child_stdout).lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
+                    while let Some(Ok(line)) = lines.next() {
                         println!("{}", line);
                         out_tx2.send(line).unwrap();
                     }
                 });
 
-                let stderr_task = tokio::spawn(async move {
+                let stderr_task = thread::spawn(move || {
                     let mut lines = BufReader::new(child_stderr).lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
+                    while let Some(Ok(line)) = lines.next() {
                         println!("{}", line);
                         out_tx.send(line).unwrap();
                     }
@@ -149,12 +151,12 @@ impl Runner {
                         Err(RecvTimeoutError::Timeout) => {}
                         Err(err) => {
                             println!("Failed to receive message: {}", err);
-                            child.kill().await.unwrap();
+                            child.kill().unwrap();
                             job_failed = true;
                             break;
                         }
                         Ok(ToRunMsg::Cancel) => {
-                            child.kill().await.unwrap();
+                            child.kill().unwrap();
                             job_canceled = true;
                             break;
                         }
@@ -163,11 +165,10 @@ impl Runner {
 
                 let status = child
                     .wait()
-                    .await
                     .expect("Internal error, failed to wait on child command");
 
-                stdout_task.await.unwrap();
-                stderr_task.await.unwrap();
+                stdout_task.join().unwrap();
+                stderr_task.join().unwrap();
 
                 output.push_str(
                     out_rx
@@ -188,7 +189,7 @@ impl Runner {
                         description: Some(format!("Job {job_name} on host {host_identifier} was canceled")),
                         context: format!("deploy/{}/{}", job_name, host_identifier),
                         target_url: None,
-                    }).await;
+                    });
                 } else if job_failed {
                     println!("{}", "Job failed ".bold().red());
                     let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
@@ -196,7 +197,7 @@ impl Runner {
                         description: Some(format!("Job {job_name} on host {host_identifier} failed")),
                         context: format!("deploy/{}/{}", job_name, host_identifier),
                         target_url: None,
-                    }).await;
+                    });
                 } else {
                     println!("{}", "Job succeeded".bold().green());
                     let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
@@ -204,7 +205,7 @@ impl Runner {
                         description: Some(format!("Job {job_name} on host {host_identifier} was successful")),
                         context: format!("deploy/{}/{}", job_name, host_identifier),
                         target_url: None,
-                    }).await;
+                    });
                 }
             }
 

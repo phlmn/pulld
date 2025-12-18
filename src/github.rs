@@ -1,5 +1,4 @@
 use anyhow::Result;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::{forge::{CreateStatus, Forge, Status, StatusState}};
@@ -57,14 +56,13 @@ impl GitHub {
     }
 }
 
-#[async_trait]
 impl Forge for GitHub {
     fn git_ssh_url(&self) -> String {
         format!("git@github.com:{}/{}.git", self.owner, self.repo)
     }
 
-    async fn get_commit_statuses(&self, sha: &str) -> Result<Vec<Status>> {
-        let client = reqwest::Client::new();
+    fn get_commit_statuses(&self, sha: &str) -> Result<Vec<Status>> {
+        let client = reqwest::blocking::Client::new();
 
         let res = client.get(format!("https://api.github.com/repos/{}/{}/commits/{}/status", self.owner, self.repo, sha))
             .header("Accept", "application/vnd.github+json")
@@ -72,17 +70,15 @@ impl Forge for GitHub {
             .header("User-Agent", "pulld")
             .bearer_auth(self.pat.clone())
             .query(&[("per_page", 100)])
-            .send()
-            .await?
-            .json::<GithubStatusResponse>()
-            .await?;
+            .send()?
+            .json::<GithubStatusResponse>()?;
 
         // TODO: collect all pages
         Ok(res.statuses.into_iter().map(Into::into).collect())
     }
 
-    async fn set_commit_status(&self, sha: &str, status: CreateStatus) -> Result<()> {
-        let client = reqwest::Client::new();
+    fn set_commit_status(&self, sha: &str, status: CreateStatus) -> Result<()> {
+        let client = reqwest::blocking::Client::new();
 
         let res = client.post(format!("https://api.github.com/repos/{}/{}/statuses/{}", self.owner, self.repo, sha))
             .header("Accept", "application/vnd.github+json")
@@ -95,8 +91,7 @@ impl Forge for GitHub {
                 description: status.description,
                 context: Some(status.context),
             })
-            .send()
-            .await?;
+            .send()?;
 
         res.error_for_status()?;
 
