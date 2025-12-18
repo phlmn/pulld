@@ -35,6 +35,12 @@ impl Runner {
         }
     }
 
+    pub async fn wait_for_run(&mut self) {
+        if let Some((handle, _)) = self.run_handle_and_sender.take() {
+            handle.await;
+        }
+    }
+
     pub async fn cancel_run(&mut self) -> Result<()> {
         if let Some((handle, to_run)) = self.run_handle_and_sender.take() {
             if !handle.is_finished() {
@@ -79,7 +85,7 @@ impl Runner {
                 let mut job_canceled = false;
                 let mut output = String::new();
 
-                println!("{}", "Running job {job_name}...".bold());
+                println!("{}", format!("Running job {job_name}...").bold());
 
                 let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
                     state: StatusState::Pending,

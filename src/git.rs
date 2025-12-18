@@ -30,6 +30,10 @@ impl GitRepo {
         self.path.as_path()
     }
 
+    pub fn url(&self) -> String {
+        self.repo.find_remote("origin").unwrap().url().unwrap().to_owned()
+    }
+
     fn fetch_options<'a>(ssh_key_path: &'a Path) -> git2::FetchOptions<'a> {
         let mut callbacks = RemoteCallbacks::new();
         callbacks.credentials(|_url, username_from_url, _allowed_types| {

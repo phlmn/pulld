@@ -49,7 +49,6 @@ pub struct GitHub {
 
 impl GitHub {
     pub fn new(owner: &str, repo: &str, pat: &str) -> Result<GitHub> {
-        println!("{}", pat);
         Ok(GitHub {
             owner: owner.to_owned(),
             repo: repo.to_owned(),
