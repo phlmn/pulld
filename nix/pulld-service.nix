@@ -83,6 +83,7 @@ let
         RestartSec = 15;
         TimeoutStopSec = 30 * 60;
       };
+      stopIfChanged = false; # allows self updates
       inherit (serviceCfg) environment path;
     };
   };
