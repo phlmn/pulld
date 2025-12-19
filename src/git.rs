@@ -15,7 +15,8 @@ impl GitRepo {
             git2::Repository::open(repo_path).unwrap()
         } else {
             println!("Cloning repo...");
-            GitRepo::clone_repo(ssh_url, repo_path, ssh_key_path, branch).expect("Failed to clone repo")
+            GitRepo::clone_repo(ssh_url, repo_path, ssh_key_path, branch)
+                .expect("Failed to clone repo")
         };
 
         GitRepo {
@@ -31,18 +32,18 @@ impl GitRepo {
     }
 
     pub fn url(&self) -> String {
-        self.repo.find_remote("origin").unwrap().url().unwrap().to_owned()
+        self.repo
+            .find_remote("origin")
+            .unwrap()
+            .url()
+            .unwrap()
+            .to_owned()
     }
 
     fn fetch_options<'a>(ssh_key_path: &'a Path) -> git2::FetchOptions<'a> {
         let mut callbacks = RemoteCallbacks::new();
         callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            Cred::ssh_key(
-                username_from_url.unwrap(),
-                None,
-                ssh_key_path,
-                None,
-            )
+            Cred::ssh_key(username_from_url.unwrap(), None, ssh_key_path, None)
         });
 
         let mut fo = git2::FetchOptions::new();
@@ -58,7 +59,12 @@ impl GitRepo {
             .fetch(&[&self.branch], Some(&mut fo), None)
     }
 
-    fn clone_repo(ssh_url: &str, path: &Path, ssh_key_path: &Path, branch: &str) -> Result<git2::Repository, git2::Error> {
+    fn clone_repo(
+        ssh_url: &str,
+        path: &Path,
+        ssh_key_path: &Path,
+        branch: &str,
+    ) -> Result<git2::Repository, git2::Error> {
         let mut builder = git2::build::RepoBuilder::new();
         builder.fetch_options(GitRepo::fetch_options(ssh_key_path));
         builder.branch(branch);
@@ -70,10 +76,7 @@ impl GitRepo {
 
         Ok(self
             .repo
-            .find_branch(
-                &format!("origin/{}", self.branch),
-                git2::BranchType::Remote,
-            )?
+            .find_branch(&format!("origin/{}", self.branch), git2::BranchType::Remote)?
             .get()
             .peel(git2::ObjectType::Commit)?)
     }
