@@ -79,7 +79,7 @@ let
         SupplementaryGroups = serviceCfg.extraGroups;
         EnvironmentFile = serviceCfg.environmentFile;
         ExecStart = lib.getExe serviceCfg.package;
-        ExecReload = "systemctl restart --no-block pulld-${name}";
+        ExecReload = "kill -TERM $MAINPID";
         Restart = "on-failure";
         RestartSec = 15;
         TimeoutStopSec = 30 * 60;
