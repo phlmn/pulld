@@ -1,17 +1,25 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use crossterm::style::Stylize;
 use itertools::Itertools;
-use std::{borrow::Cow, env, io::{BufRead, BufReader}, os::unix::process::CommandExt, process::{Command, Stdio}, sync::{Arc, mpsc::RecvTimeoutError}, thread::{self, JoinHandle}, time::Duration};
+use std::{
+    borrow::Cow,
+    env,
+    io::{BufRead, BufReader},
+    os::unix::process::CommandExt,
+    process::{Command, Stdio},
+    sync::{Arc, mpsc::RecvTimeoutError},
+    thread::{self, JoinHandle},
+    time::Duration,
+};
 
 use crate::{
-    forge::{CreateStatus, Forge, StatusState}, git::GitRepo, workflow_config::{get_jobs_for_host, read_config}
+    forge::{CreateStatus, Forge, StatusState},
+    git::GitRepo,
+    workflow_config::{get_jobs_for_host, read_config},
 };
 
 pub struct Runner {
-    run_handle_and_sender: Option<(
-        JoinHandle<()>,
-        std::sync::mpsc::Sender<ToRunMsg>,
-    )>,
+    run_handle_and_sender: Option<(JoinHandle<()>, std::sync::mpsc::Sender<ToRunMsg>)>,
     forge: Arc<dyn Forge>,
 }
 
@@ -33,9 +41,7 @@ impl Runner {
 
     pub fn wait_for_run(&mut self) -> Result<()> {
         if let Some((handle, _)) = self.run_handle_and_sender.take() {
-            handle.join().map_err(|err| {
-                anyhow!("asd")
-            })?;
+            handle.join().map_err(|err| anyhow!("asd"))?;
         }
 
         Ok(())
@@ -45,15 +51,20 @@ impl Runner {
         if let Some((handle, to_run)) = self.run_handle_and_sender.take() {
             if !handle.is_finished() {
                 to_run.send(ToRunMsg::Cancel).unwrap();
-                handle.join().map_err(|err| {
-                    anyhow!("Failed to cancel run")
-                })?;
+                handle
+                    .join()
+                    .map_err(|err| anyhow!("Failed to cancel run"))?;
             }
         }
         Ok(())
     }
 
-    pub fn start_run(&mut self, repo: &GitRepo, commit_id: git2::Oid, host_identifier: &str) -> Result<()> {
+    pub fn start_run(
+        &mut self,
+        repo: &GitRepo,
+        commit_id: git2::Oid,
+        host_identifier: &str,
+    ) -> Result<()> {
         let (to_run_tx, to_run_rx) = std::sync::mpsc::channel::<ToRunMsg>();
 
         println!(
@@ -69,12 +80,17 @@ impl Runner {
         let jobs = get_jobs_for_host(&workflow_config, host_identifier)?;
 
         for job_name in jobs.keys() {
-            self.forge.set_commit_status(&commit_id.to_string(), CreateStatus {
-                state: StatusState::Pending,
-                description: Some(format!("Job {job_name} on host {host_identifier} is waiting...")),
-                context: format!("deploy/{}/{}", job_name, host_identifier),
-                target_url: None,
-            })?;
+            self.forge.set_commit_status(
+                &commit_id.to_string(),
+                CreateStatus {
+                    state: StatusState::Pending,
+                    description: Some(format!(
+                        "Job {job_name} on host {host_identifier} is waiting..."
+                    )),
+                    context: format!("deploy/{}/{}", job_name, host_identifier),
+                    target_url: None,
+                },
+            )?;
         }
 
         let forge = self.forge.clone();
@@ -90,12 +106,17 @@ impl Runner {
 
                 println!("{}", format!("Running job {job_name}...").bold());
 
-                let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
-                    state: StatusState::Pending,
-                    description: Some(format!("Job {job_name} on host {host_identifier} is running...")),
-                    context: format!("deploy/{}/{}", job_name, host_identifier),
-                    target_url: None,
-                });
+                let _ = forge.set_commit_status(
+                    &commit_id.to_string(),
+                    CreateStatus {
+                        state: StatusState::Pending,
+                        description: Some(format!(
+                            "Job {job_name} on host {host_identifier} is running..."
+                        )),
+                        context: format!("deploy/{}/{}", job_name, host_identifier),
+                        target_url: None,
+                    },
+                );
 
                 let mut script = String::new();
                 for cmd in job.script.unwrap_or_default() {
@@ -187,28 +208,43 @@ impl Runner {
 
                 if job_canceled {
                     println!("{}", "Job canceled".bold().dark_grey());
-                    let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
-                        state: StatusState::Error,
-                        description: Some(format!("Job {job_name} on host {host_identifier} was canceled")),
-                        context: format!("deploy/{}/{}", job_name, host_identifier),
-                        target_url: None,
-                    });
+                    let _ = forge.set_commit_status(
+                        &commit_id.to_string(),
+                        CreateStatus {
+                            state: StatusState::Error,
+                            description: Some(format!(
+                                "Job {job_name} on host {host_identifier} was canceled"
+                            )),
+                            context: format!("deploy/{}/{}", job_name, host_identifier),
+                            target_url: None,
+                        },
+                    );
                 } else if job_failed {
                     println!("{}", "Job failed ".bold().red());
-                    let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
-                        state: StatusState::Error,
-                        description: Some(format!("Job {job_name} on host {host_identifier} failed")),
-                        context: format!("deploy/{}/{}", job_name, host_identifier),
-                        target_url: None,
-                    });
+                    let _ = forge.set_commit_status(
+                        &commit_id.to_string(),
+                        CreateStatus {
+                            state: StatusState::Error,
+                            description: Some(format!(
+                                "Job {job_name} on host {host_identifier} failed"
+                            )),
+                            context: format!("deploy/{}/{}", job_name, host_identifier),
+                            target_url: None,
+                        },
+                    );
                 } else {
                     println!("{}", "Job succeeded".bold().green());
-                    let _ = forge.set_commit_status(&commit_id.to_string(), CreateStatus {
-                        state: StatusState::Success,
-                        description: Some(format!("Job {job_name} on host {host_identifier} was successful")),
-                        context: format!("deploy/{}/{}", job_name, host_identifier),
-                        target_url: None,
-                    });
+                    let _ = forge.set_commit_status(
+                        &commit_id.to_string(),
+                        CreateStatus {
+                            state: StatusState::Success,
+                            description: Some(format!(
+                                "Job {job_name} on host {host_identifier} was successful"
+                            )),
+                            context: format!("deploy/{}/{}", job_name, host_identifier),
+                            target_url: None,
+                        },
+                    );
                 }
             }
 
