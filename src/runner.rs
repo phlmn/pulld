@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use crossterm::style::Stylize;
 use itertools::Itertools;
-use std::{borrow::Cow, env, io::{BufRead, BufReader}, process::{Command, Stdio}, sync::{Arc, mpsc::RecvTimeoutError}, thread::{self, JoinHandle}, time::Duration};
+use std::{borrow::Cow, env, io::{BufRead, BufReader}, os::unix::process::CommandExt, process::{Command, Stdio}, sync::{Arc, mpsc::RecvTimeoutError}, thread::{self, JoinHandle}, time::Duration};
 
 use crate::{
     forge::{CreateStatus, Forge, StatusState}, git::GitRepo, workflow_config::{get_jobs_for_host, read_config}
@@ -115,6 +115,7 @@ impl Runner {
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
                     .stdin(Stdio::null())
+                    .process_group(0) // prevent child processes from receiving signals
                     .spawn()
                     .unwrap();
 
