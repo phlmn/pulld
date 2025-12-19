@@ -79,6 +79,7 @@ impl Runner {
 
         let forge = self.forge.clone();
         let host_identifier = host_identifier.to_owned();
+        let repo_path = repo.path().to_owned();
 
         let run_handle = thread::spawn(move || {
             let mut job_iter = jobs.into_iter();
@@ -107,6 +108,7 @@ impl Runner {
                 }
 
                 let mut child = Command::new("sh")
+                    .current_dir(&repo_path)
                     .args(["-e", "-c", &script])
                     .env("HOST_OS", env::consts::OS)
                     .env("HOST_ARCH", env::consts::ARCH)
