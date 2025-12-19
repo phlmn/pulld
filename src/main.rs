@@ -11,7 +11,7 @@ use crossterm::style::Stylize;
 use gethostname::gethostname;
 use github::GitHub;
 use signal_hook::{consts::{SIGINT, SIGTERM}, iterator::Signals};
-use std::{path::{PathBuf}, sync::{Arc, mpsc::{self, Receiver}}, thread, time::Duration};
+use std::{path::PathBuf, process, sync::{Arc, mpsc::{self, Receiver}}, thread, time::Duration};
 
 use crate::{cli::Cli, forge::Forge, git::GitRepo, runner::Runner};
 
@@ -54,12 +54,12 @@ fn main() -> Result<()> {
                 SIGTERM => {
                     println!("Received SIGTERM signal");
                     println!("Shutting down gracefully...");
-                    shutdown_sender.send(()).unwrap();
+                    shutdown_sender.send(128 + signal).unwrap();
                 },
                 SIGINT => {
                     println!("Received SIGINT signal");
                     println!("Shutting down gracefully...");
-                    shutdown_sender.send(()).unwrap();
+                    shutdown_sender.send(128 + signal).unwrap();
                 },
                 _ => unreachable!(),
             }
@@ -80,12 +80,12 @@ struct Poller {
     current_commit_id: git2::Oid,
     runner: Runner,
     host_identifier: String,
-    shutdown_rx: Receiver<()>,
+    shutdown_rx: Receiver<i32>,
     poll_interval: u64,
 }
 
 impl Poller {
-    fn new(repo: GitRepo, forge: Arc<dyn Forge>, host_identifier: String, poll_interval: u64, shutdown_rx: Receiver<()>) -> Result<Self> {
+    fn new(repo: GitRepo, forge: Arc<dyn Forge>, host_identifier: String, poll_interval: u64, shutdown_rx: Receiver<i32>) -> Result<Self> {
         let current_commit_id = repo.current_commit()?.id();
 
         Ok(Poller {
@@ -105,12 +105,14 @@ impl Poller {
             self.poll()?;
 
             match self.shutdown_rx.recv_timeout(Duration::from_secs(self.poll_interval)) {
-                Ok(_) => {
+                Ok(exit_code) => {
                     if self.runner.is_running() {
                         println!("Waiting for run to finish...");
                         self.runner.wait_for_run()?;
                     }
-                    return Ok(());
+
+                    process::exit(exit_code);
+                    // return Ok(());
                 },
                 Err(_) => continue,
             }
