@@ -28,7 +28,7 @@ fn main() -> Result<()> {
 
     let github_token = if let Some(token_file) = &cli.github_token_file {
         let token = std::fs::read_to_string(token_file)?;
-        token
+        token.trim().to_owned()
     } else {
         cli.github_token.expect("No GitHub token provided")
     };
