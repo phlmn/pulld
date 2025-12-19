@@ -10,7 +10,7 @@ use clap::Parser;
 use crossterm::style::Stylize;
 use gethostname::gethostname;
 use github::GitHub;
-use signal_hook::{consts::SIGTERM, iterator::Signals};
+use signal_hook::{consts::{SIGINT, SIGTERM}, iterator::Signals};
 use std::{path::{PathBuf}, sync::{Arc, mpsc::{self, Receiver}}, thread, time::Duration};
 
 use crate::{cli::Cli, forge::Forge, git::GitRepo, runner::Runner};
@@ -45,12 +45,19 @@ fn main() -> Result<()> {
     let mut poller = Poller::new(git_repo, Arc::new(gh), host_identifier, cli.poll_interval, shutdown_receiver)?;
 
     // signals handling
-    let mut signals = Signals::new(&[SIGTERM])?;
+    let mut signals = Signals::new(&[SIGTERM, SIGINT])?;
     let handle = signals.handle();
     thread::spawn(move || {
         for signal in signals.forever() {
+            println!("Received signal {}", signal);
             match signal {
                 SIGTERM => {
+                    println!("Received SIGTERM signal");
+                    println!("Shutting down gracefully...");
+                    shutdown_sender.send(()).unwrap();
+                },
+                SIGINT => {
+                    println!("Received SIGINT signal");
                     println!("Shutting down gracefully...");
                     shutdown_sender.send(()).unwrap();
                 },
