@@ -79,11 +79,13 @@ let
         SupplementaryGroups = serviceCfg.extraGroups;
         EnvironmentFile = serviceCfg.environmentFile;
         ExecStart = lib.getExe serviceCfg.package;
+        ExecReload = "systemctl restart --no-block pulld-${name}";
         Restart = "on-failure";
         RestartSec = 15;
         TimeoutStopSec = 30 * 60;
       };
       restartIfChanged = false; # allows self updates
+      reloadIfChanged = true;
       inherit (serviceCfg) environment path;
     };
   };
