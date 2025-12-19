@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::{forge::{CreateStatus, Forge, Status, StatusState}};
+use crate::forge::{CreateStatus, Forge, Status, StatusState};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GithubStatusResponse {
@@ -62,33 +62,44 @@ impl Forge for GitHub {
     }
 
     fn get_commit_statuses(&self, sha: &str) -> Result<Vec<Status>> {
-        let res = ureq::get(format!("https://api.github.com/repos/{}/{}/commits/{}/status", self.owner, self.repo, sha))
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "pulld")
-            .header("Authorization", format!("Bearer {}", self.pat))
-            .query("per_page", 100.to_string())
-            .call()?.body_mut().read_json::<GithubStatusResponse>()?;
+        let res = ureq::get(format!(
+            "https://api.github.com/repos/{}/{}/commits/{}/status",
+            self.owner, self.repo, sha
+        ))
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("User-Agent", "pulld")
+        .header("Authorization", format!("Bearer {}", self.pat))
+        .query("per_page", 100.to_string())
+        .call()?
+        .body_mut()
+        .read_json::<GithubStatusResponse>()?;
 
         // TODO: collect all pages
         Ok(res.statuses.into_iter().map(Into::into).collect())
     }
 
     fn set_commit_status(&self, sha: &str, status: CreateStatus) -> Result<()> {
-        let res = ureq::post(format!("https://api.github.com/repos/{}/{}/statuses/{}", self.owner, self.repo, sha))
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "pulld")
-            .header("Authorization", format!("Bearer {}", self.pat))
-            .send_json(&GithubCreateStatus {
-                state: status.state.into(),
-                target_url: status.target_url,
-                description: status.description,
-                context: Some(status.context),
-            })?;
+        let res = ureq::post(format!(
+            "https://api.github.com/repos/{}/{}/statuses/{}",
+            self.owner, self.repo, sha
+        ))
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("User-Agent", "pulld")
+        .header("Authorization", format!("Bearer {}", self.pat))
+        .send_json(&GithubCreateStatus {
+            state: status.state.into(),
+            target_url: status.target_url,
+            description: status.description,
+            context: Some(status.context),
+        })?;
 
         if !res.status().is_success() {
-            return Err(anyhow::anyhow!("Failed to set commit status. HTTP status: {}", res.status()))
+            return Err(anyhow::anyhow!(
+                "Failed to set commit status. HTTP status: {}",
+                res.status()
+            ));
         }
 
         Ok(())
