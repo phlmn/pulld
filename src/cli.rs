@@ -53,9 +53,9 @@ pub struct Cli {
     pub checkout_path: PathBuf,
 
     #[arg(
-        long = "ssh_key_path",
+        long = "ssh_key_file",
         value_name = "PATH",
-        env = "PULLD_SSH_KEY_PATH",
+        env = "PULLD_SSH_KEY_FILE",
         help = "Path to the SSH private key file used for git"
     )]
     pub ssh_key_path: PathBuf,
