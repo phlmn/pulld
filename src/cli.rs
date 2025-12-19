@@ -47,10 +47,9 @@ pub struct Cli {
         long = "checkout_path",
         value_name = "PATH",
         env = "PULLD_CHECKOUT_PATH",
-        default_value = "/var/pulld", // TODO
         help = "Path where the repository will be checked out locally"
     )]
-    pub checkout_path: PathBuf,
+    pub checkout_path: Option<PathBuf>,
 
     #[arg(
         long = "ssh_key_file",

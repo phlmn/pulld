@@ -11,7 +11,7 @@ use crossterm::style::Stylize;
 use gethostname::gethostname;
 use github::GitHub;
 use signal_hook::{consts::SIGTERM, iterator::Signals};
-use std::{sync::{Arc, mpsc::{self, Receiver}}, thread, time::Duration};
+use std::{path::{PathBuf}, sync::{Arc, mpsc::{self, Receiver}}, thread, time::Duration};
 
 use crate::{cli::Cli, forge::Forge, git::GitRepo, runner::Runner};
 
@@ -33,9 +33,13 @@ fn main() -> Result<()> {
         cli.github_token.expect("No GitHub token provided")
     };
 
+    let checkout_path = cli.checkout_path.unwrap_or_else(|| {
+        PathBuf::from("/var/pulld/repos").join(&cli.owner).join(&cli.repo)
+    });
+
     let gh = GitHub::new(&cli.owner, &cli.repo, &github_token)?;
     let ssh_url = gh.git_ssh_url();
-    let git_repo = git::GitRepo::new(&cli.checkout_path, &ssh_url, &cli.branch, &cli.ssh_key_path);
+    let git_repo = git::GitRepo::new(&checkout_path, &ssh_url, &cli.branch, &cli.ssh_key_path);
 
     let (shutdown_sender, shutdown_receiver) = mpsc::channel();
     let mut poller = Poller::new(git_repo, Arc::new(gh), host_identifier, cli.poll_interval, shutdown_receiver)?;
