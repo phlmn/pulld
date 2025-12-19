@@ -79,7 +79,7 @@ let
         SupplementaryGroups = serviceCfg.extraGroups;
         EnvironmentFile = serviceCfg.environmentFile;
         ExecStart = lib.getExe serviceCfg.package;
-        ExecReload = "kill -TERM $MAINPID";
+        ExecReload = "${pkgs.coreutils}/bin/kill -TERM $MAINPID";
         Restart = "on-failure";
         RestartSec = 15;
         TimeoutStopSec = 30 * 60;
