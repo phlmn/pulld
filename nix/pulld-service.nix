@@ -81,6 +81,7 @@ let
         ExecStart = lib.getExe serviceCfg.package;
         Restart = "on-failure";
         RestartSec = 15;
+        TimeoutStopSec = 30 * 60;
       };
       inherit (serviceCfg) environment path;
     };
