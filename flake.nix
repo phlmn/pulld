@@ -40,6 +40,19 @@
           ./nix/pulld-service.nix
         ];
       };
+
+      darwinModules.default = {
+        config,
+        pkgs,
+        lib,
+        ...
+      }: {
+        nixpkgs.overlays = [ self.overlays.default ];
+
+        imports = [
+          ./nix/pulld-service-darwin.nix
+        ];
+      };
     }
     // (flake-utils.lib.eachDefaultSystem (
       system:
