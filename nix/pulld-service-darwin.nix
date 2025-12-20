@@ -46,19 +46,25 @@ let
     };
   };
 
-  mkService = name: serviceCfg: {
-    name = "pulld-${name}";
-    value = {
-      serviceConfig = {
-        UserName = serviceCfg.user;
-        Program = lib.getExe serviceCfg.package;
-        KeepAlive = true;
-        RunAtLoad = true;
-        ExitTimeOut = 30 * 60;
-        EnvironmentVariables = serviceCfg.environment;
+  mkService = name: serviceCfg:
+    let
+      logDir = "/var/log/pulld/${name}";
+    in
+    {
+      name = "pulld-${name}";
+      value = {
+        serviceConfig = {
+          UserName = serviceCfg.user;
+          Program = lib.getExe serviceCfg.package;
+          StandardErrorPath = "${logDir}/launchd-stderr.log";
+          StandardOutPath = "${logDir}/launchd-stdout.log";
+          KeepAlive = true;
+          RunAtLoad = true;
+          ExitTimeOut = 30 * 60;
+          EnvironmentVariables = serviceCfg.environment;
+        };
+        inherit (serviceCfg) environment path;
       };
-      inherit (serviceCfg) environment path;
-    };
   };
 in
 {
