@@ -87,7 +87,7 @@ impl Runner {
                     description: Some(format!(
                         "Job {job_name} on host {host_identifier} is waiting..."
                     )),
-                    context: format!("deploy/{}/{}", job_name, host_identifier),
+                    context: format!("pulld/{}/{}", job_name, host_identifier),
                     target_url: None,
                 },
             )?;
@@ -113,7 +113,7 @@ impl Runner {
                         description: Some(format!(
                             "Job {job_name} on host {host_identifier} is running..."
                         )),
-                        context: format!("deploy/{}/{}", job_name, host_identifier),
+                        context: format!("pulld/{}/{}", job_name, host_identifier),
                         target_url: None,
                     },
                 );
@@ -215,7 +215,7 @@ impl Runner {
                             description: Some(format!(
                                 "Job {job_name} on host {host_identifier} was canceled"
                             )),
-                            context: format!("deploy/{}/{}", job_name, host_identifier),
+                            context: format!("pulld/{}/{}", job_name, host_identifier),
                             target_url: None,
                         },
                     );
@@ -228,7 +228,7 @@ impl Runner {
                             description: Some(format!(
                                 "Job {job_name} on host {host_identifier} failed"
                             )),
-                            context: format!("deploy/{}/{}", job_name, host_identifier),
+                            context: format!("pulld/{}/{}", job_name, host_identifier),
                             target_url: None,
                         },
                     );
@@ -241,7 +241,7 @@ impl Runner {
                             description: Some(format!(
                                 "Job {job_name} on host {host_identifier} was successful"
                             )),
-                            context: format!("deploy/{}/{}", job_name, host_identifier),
+                            context: format!("pulld/{}/{}", job_name, host_identifier),
                             target_url: None,
                         },
                     );
