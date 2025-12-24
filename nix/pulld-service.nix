@@ -80,7 +80,7 @@ let
         EnvironmentFile = serviceCfg.environmentFile;
         ExecStart = lib.getExe serviceCfg.package;
         ExecReload = "${pkgs.coreutils}/bin/kill -TERM $MAINPID";
-        Restart = "on-failure";
+        Restart = "always";
         RestartSec = 15;
         TimeoutStopSec = 30 * 60;
       };
