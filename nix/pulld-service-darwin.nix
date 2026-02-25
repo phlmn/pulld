@@ -26,15 +26,6 @@ let
         description = "pulld config environment variables";
       };
 
-      user = lib.mkOption {
-        type = lib.types.str;
-        default = null;
-        example = "root";
-        description = ''
-          User for the service.
-        '';
-      };
-
       path = lib.mkOption {
         type = lib.types.listOf lib.types.package;
         default = [ ];
@@ -54,7 +45,6 @@ let
       name = "pulld-${name}";
       value = {
         serviceConfig = {
-          UserName = serviceCfg.user;
           Program = lib.getExe serviceCfg.package;
           StandardErrorPath = "${logDir}/launchd-stderr.log";
           StandardOutPath = "${logDir}/launchd-stdout.log";
@@ -80,8 +70,6 @@ in
               PULLD_OWNER = "phlmn";
               PULLD_REPO = "nixos-config";
             };
-
-            user = "root";
           };
         }
       '';
