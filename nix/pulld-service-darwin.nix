@@ -52,8 +52,9 @@ let
           RunAtLoad = true;
           ExitTimeOut = 30 * 60;
           EnvironmentVariables = serviceCfg.environment;
+          WorkingDirectory = "/var/root";
         };
-        inherit (serviceCfg) environment path;
+        inherit (serviceCfg) path;
       };
   };
 in
