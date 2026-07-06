@@ -44,8 +44,8 @@ let
     {
       name = "pulld-${name}";
       value = {
+        command = lib.getExe serviceCfg.package; # use this over serviceConfig.Program as it wait for the nix store to be available
         serviceConfig = {
-          Program = lib.getExe serviceCfg.package;
           StandardErrorPath = "${logDir}/launchd-stderr.log";
           StandardOutPath = "${logDir}/launchd-stdout.log";
           KeepAlive = true;
