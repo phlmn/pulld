@@ -51,6 +51,7 @@ let
           KeepAlive = true;
           RunAtLoad = true;
           ExitTimeOut = 30 * 60;
+          ThrottleInterval = 10;
           EnvironmentVariables = serviceCfg.environment;
           WorkingDirectory = "/var/root";
         };
